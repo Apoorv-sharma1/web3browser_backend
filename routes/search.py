@@ -118,63 +118,69 @@ def search():
     
     results = []
     
-    # --- SOURCE 1: DuckDuckGo HTML Lite ---
+    # --- SOURCE 1: DuckDuckGo ---
     try:
         ddg_url = "https://html.duckduckgo.com/html/"
         response = requests.post(ddg_url, data={'q': query}, headers=headers, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            for item in soup.find_all('div', class_='result__body'):
-                title_el = item.find('a', class_='result__url')
-                snippet_el = item.find('a', class_='result__snippet')
-                if title_el and snippet_el:
+            # DuckDuckGo Lite typically has 20-30 results per page
+            for item in soup.select('.result__body'):
+                title_el = item.select_one('.result__title a')
+                snippet_el = item.select_one('.result__snippet')
+                if title_el:
                     href = title_el.get('href', '')
                     if 'uddg=' in href:
                         href = unquote(href.split('uddg=')[-1].split('&')[0])
+                    
                     results.append({
                         "title": title_el.text.strip(),
-                        "description": snippet_el.text.strip(),
+                        "description": snippet_el.text.strip() if snippet_el else "No description available.",
                         "url": href,
                         "domain": href.split("//")[-1].split("/")[0] if "//" in href else "Web Link"
                     })
     except Exception as e:
         print(f"DDG Error: {e}")
 
-    # --- SOURCE 2: Google Search (Standard Browser) ---
+    # --- SOURCE 2: Google ---
     try:
-        google_url = f"https://www.google.com/search?q={query}&num=30"
+        google_url = f"https://www.google.com/search?q={query}&num=40"
         res = requests.get(google_url, headers=headers, timeout=5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # More flexible selector: Look for all <a> tags that contain an <h3>
+            # Extract results by looking for common patterns (H3 inside A)
             for a in soup.find_all('a'):
                 h3 = a.find('h3')
                 if h3:
                     link = a.get('href', '')
-                    # Filter out internal/ad links
                     if link.startswith('http') and 'google.com' not in link:
                         if not any(r['url'] == link for r in results):
-                            title = h3.text.strip()
-                            # Try to find description in the surrounding block
-                            description = "View site for more details..."
-                            parent = a.find_parent('div')
-                            if parent:
-                                # Many results have a snippet in a following div or within the same container
-                                snippet_div = parent.find_next_sibling('div')
-                                if snippet_div:
-                                    description = snippet_div.text.strip()[:250]
+                            # Try to find description in the container
+                            desc = "View site for more details..."
+                            container = a.find_parent(class_=['g', 'MjjYud']) or a.find_parent('div')
+                            if container:
+                                # Standard snippet location
+                                snippet_div = container.find('div', style=lambda x: x and '-webkit-line-clamp' in x)
+                                if snippet_div: desc = snippet_div.get_text().strip()
                             
                             results.append({
-                                "title": title,
-                                "description": description,
+                                "title": h3.get_text().strip(),
+                                "description": desc[:250],
                                 "url": link,
                                 "domain": link.split("//")[-1].split("/")[0]
                             })
     except Exception as e:
         print(f"Google Error: {e}")
 
-    # Final touch: limit and return
-    return jsonify(results[:30]), 200
+    # Deduplicate and prioritize official results
+    seen_urls = set()
+    final_results = []
+    for r in results:
+        if r['url'] not in seen_urls:
+            final_results.append(r)
+            seen_urls.add(r['url'])
+
+    return jsonify(final_results[:40]), 200
 
 @search_bp.route('/suggest', methods=['GET'])
 def suggest():
