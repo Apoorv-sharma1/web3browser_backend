@@ -88,10 +88,12 @@ def proxy_view():
         
         content = res.content
         
-        # If it's HTML, inject a <base> tag to help find relative resources (CSS, JS, Images)
+        # If it's HTML, clean it up to prevent JS crashes and relative path issues
         content_type = res.headers.get("Content-Type", "").lower()
         if "text/html" in content_type:
             soup = BeautifulSoup(content, 'html.parser')
+            
+            # 1. Inject <base> tag to fix relative assets
             if not soup.find('base'):
                 base_tag = soup.new_tag('base', href=url)
                 if soup.head:
@@ -100,6 +102,17 @@ def proxy_view():
                     head = soup.new_tag('head')
                     head.append(base_tag)
                     soup.insert(0, head)
+            
+            # 2. Aggressive Script/Telemetry Stripping
+            # We remove scripts that often cause 'Client-Side Exceptions' or hydration errors in proxied environments
+            for script in soup.find_all('script'):
+                script_content = script.string or ""
+                # Remove Next.js/React hydration data and common trackers
+                if any(x in script_content for x in ['__NEXT_DATA__', 'hydrate', 'telemetry', 'analytics', 'sentry']):
+                    script.decompose()
+                elif script.get('src') and any(x in script.get('src') for x in ['next/static', 'analytics.js', 'gtm.js']):
+                    script.decompose()
+
             content = str(soup).encode('utf-8')
 
         return Response(content, res.status_code, headers)
