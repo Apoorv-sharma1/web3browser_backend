@@ -88,19 +88,23 @@ def proxy_view():
         
         content = res.content
         
-        # If it's HTML, inject a <base> tag to help find relative resources (CSS, JS, Images)
+        # If it's HTML, inject a <base> tag to help find relative resources
         content_type = res.headers.get("Content-Type", "").lower()
         if "text/html" in content_type:
-            soup = BeautifulSoup(content, 'html.parser')
-            if not soup.find('base'):
-                base_tag = soup.new_tag('base', href=url)
-                if soup.head:
-                    soup.head.insert(0, base_tag)
-                else:
-                    head = soup.new_tag('head')
-                    head.append(base_tag)
-                    soup.insert(0, head)
-            content = str(soup).encode('utf-8')
+            # Use regex for performance to avoid BeautifulSoup timeout on large sites like OpenSea
+            try:
+                decoded_content = content.decode('utf-8', errors='ignore')
+                if '<base' not in decoded_content.lower():
+                    base_tag = f'<base href="{url}">'
+                    # Inject after <head> or at the start if no head found
+                    if '<head>' in decoded_content.lower():
+                        decoded_content = re.sub(r'(<head.*?>)', r'\1' + base_tag, decoded_content, flags=re.IGNORECASE, count=1)
+                    else:
+                        decoded_content = base_tag + decoded_content
+                content = decoded_content.encode('utf-8')
+            except Exception as e:
+                print(f"Regex injection failed: {e}")
+                # Fallback to original content if injection fails
 
         return Response(content, res.status_code, headers)
     except Exception as e:
