@@ -54,11 +54,36 @@ def create_app():
     @app.route('/debug/init')
     def debug_init():
         from database.db_connection import db
+        # Diagnostic info
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'NOT SET')
+        masked_uri = db_uri
+        if db_uri and ':' in db_uri and '@' in db_uri:
+             # Mask password in URI for safety: postgres://user:password@host/db
+             parts = db_uri.split('@')
+             head = parts[0].split(':')
+             if len(head) > 2:
+                  masked_uri = f"{head[0]}:{head[1]}:****@{parts[1]}"
+             else:
+                  masked_uri = f"{head[0]}:****@{parts[1]}"
+                  
         try:
             db.create_all()
-            return {"status": "success", "message": "Database tables synchronized"}
+            return {
+                "status": "success", 
+                "message": "Database tables synchronized",
+                "debug": {
+                    "db_uri_configured": masked_uri,
+                    "sqlalchemy_track": app.config.get('SQLALCHEMY_TRACK_MODIFICATIONS')
+                }
+            }
         except Exception as e:
-            return {"status": "error", "message": str(e)}, 200
+            return {
+                "status": "error", 
+                "message": str(e),
+                "debug": {
+                    "db_uri_configured": masked_uri
+                }
+            }, 200
 
     return app
 
