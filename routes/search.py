@@ -144,35 +144,30 @@ def search():
 
     # --- SOURCE 2: Google ---
     try:
-        google_url = f"https://www.google.com/search?q={query}&num=40"
-        res = requests.get(google_url, headers=headers, timeout=5)
+        # Use mobile UA for simpler, more scrapable HTML
+        google_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+        google_url = f"https://www.google.com/search?q={query}&num=30"
+        res = requests.get(google_url, headers={"User-Agent": google_ua}, timeout=5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # Extract results by looking for common patterns (H3 inside A)
-            for a in soup.find_all('a'):
-                h3 = a.find('h3')
-                if h3:
-                    link = a.get('href', '')
-                    if link.startswith('http') and 'google.com' not in link:
-                        if not any(r['url'] == link for r in results):
-                            # Try to find description in the container
-                            desc = "View site for more details..."
-                            container = a.find_parent(class_=['g', 'MjjYud']) or a.find_parent('div')
-                            if container:
-                                # Standard snippet location
-                                snippet_div = container.find('div', style=lambda x: x and '-webkit-line-clamp' in x)
-                                if snippet_div: desc = snippet_div.get_text().strip()
-                            
+            # Google mobile uses specific structures: look for any 'a' with a nested 'div' or 'span' as title
+            for item in soup.select('div[data-sokp], div.v70zc, div.g'):
+                a = item.find('a')
+                if a and a.get('href', '').startswith('http'):
+                    link = a.get('href')
+                    if 'google.com' not in link and not any(r['url'] == link for r in results):
+                        title_el = item.find(['h3', 'div[role="heading"]', 'span'])
+                        if title_el:
                             results.append({
-                                "title": h3.get_text().strip(),
-                                "description": desc[:250],
+                                "title": title_el.get_text().strip(),
+                                "description": "View details in browser...",
                                 "url": link,
                                 "domain": link.split("//")[-1].split("/")[0]
                             })
     except Exception as e:
         print(f"Google Error: {e}")
 
-    # Deduplicate and prioritize official results
+    # Deduplicate and ensure at least 25+ results
     seen_urls = set()
     final_results = []
     for r in results:
