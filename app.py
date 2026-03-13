@@ -50,6 +50,12 @@ def create_app():
     @app.route('/favicon.png')
     def favicon():
         return '', 204
+        
+    # SILENCE TELEMETRY 404s: Proxied sites (YouTube/Google) often leak telemetry paths 
+    # to the proxy origin. This handles them gracefully to keep logs clean.
+    @app.route('/_/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+    def silence_telemetry(path):
+        return '', 204
     
     @app.route('/debug/init')
     def debug_init():

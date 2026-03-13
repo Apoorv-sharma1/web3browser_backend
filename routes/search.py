@@ -140,29 +140,33 @@ def search():
     except Exception as e:
         print(f"DDG Error: {e}")
 
-    # --- SOURCE 2: Google Search (Standard Lite) ---
+    # --- SOURCE 2: Google Search (Standard Browser) ---
     try:
-        google_url = f"https://www.google.com/search?q={query}&num=20"
-        # Standard Desktop UA but lite version
+        google_url = f"https://www.google.com/search?q={query}&num=30"
         res = requests.get(google_url, headers=headers, timeout=5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # Look for the container divs for search results (divs with class 'g' in standard desktop)
-            for g in soup.find_all('div', class_='g'):
-                anchors = g.find_all('a')
-                if anchors:
-                    link = anchors[0].get('href')
-                    title = g.find('h3')
-                    if link and title and link.startswith('http'):
+            # More flexible selector: Look for all <a> tags that contain an <h3>
+            for a in soup.find_all('a'):
+                h3 = a.find('h3')
+                if h3:
+                    link = a.get('href', '')
+                    # Filter out internal/ad links
+                    if link.startswith('http') and 'google.com' not in link:
                         if not any(r['url'] == link for r in results):
-                            # Try to find description
-                            desc = g.find('div', style=lambda x: x and '-webkit-line-clamp' in x)
-                            if not desc:
-                                desc = g.find('span', class_=lambda x: x and len(x) > 10) # Fallback for snippet
+                            title = h3.text.strip()
+                            # Try to find description in the surrounding block
+                            description = "View site for more details..."
+                            parent = a.find_parent('div')
+                            if parent:
+                                # Many results have a snippet in a following div or within the same container
+                                snippet_div = parent.find_next_sibling('div')
+                                if snippet_div:
+                                    description = snippet_div.text.strip()[:250]
                             
                             results.append({
-                                "title": title.text.strip(),
-                                "description": desc.text.strip() if desc else "View result for more details...",
+                                "title": title,
+                                "description": description,
                                 "url": link,
                                 "domain": link.split("//")[-1].split("/")[0]
                             })
