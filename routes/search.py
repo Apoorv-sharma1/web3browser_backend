@@ -129,10 +129,8 @@ def search():
                 snippet_el = item.find('a', class_='result__snippet')
                 if title_el and snippet_el:
                     href = title_el.get('href', '')
-                    # Clean DDG redirect
                     if 'uddg=' in href:
                         href = unquote(href.split('uddg=')[-1].split('&')[0])
-                    
                     results.append({
                         "title": title_el.text.strip(),
                         "description": snippet_el.text.strip(),
@@ -142,40 +140,37 @@ def search():
     except Exception as e:
         print(f"DDG Error: {e}")
 
-    # --- SOURCE 2: Google Search (Mobile Lite) ---
+    # --- SOURCE 2: Google Search (Standard Lite) ---
     try:
-        # Use a mobile UA to get simpler HTML from Google
-        google_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
-        google_url = f"https://www.google.com/search?q={query}&num=15"
-        res = requests.get(google_url, headers={"User-Agent": google_ua}, timeout=5)
+        google_url = f"https://www.google.com/search?q={query}&num=20"
+        # Standard Desktop UA but lite version
+        res = requests.get(google_url, headers=headers, timeout=5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # Look for standard mobile result blocks
-            for item in soup.find_all('div', recursive=True):
-                # Google mobile results often use specific a tags with h3 inside
-                a_tag = item.find('a')
-                h3_tag = item.find('h3')
-                if a_tag and h3_tag and a_tag.get('href', '').startswith('http'):
-                    url = a_tag.get('href')
-                    # Don't add if already in results (deduplicate by URL)
-                    if not any(r['url'] == url for r in results):
-                        # Find snippet (usually a div with specific style or following the h3)
-                        snippet = ""
-                        # Rough heuristic for google mobile snippets
-                        next_div = item.find('div', class_=lambda x: x and len(x) > 0)
-                        if next_div: snippet = next_div.text.strip()
-                        
-                        results.append({
-                            "title": h3_tag.text.strip(),
-                            "description": snippet[:200] + "..." if len(snippet) > 200 else snippet,
-                            "url": url,
-                            "domain": url.split("//")[-1].split("/")[0]
-                        })
+            # Look for the container divs for search results (divs with class 'g' in standard desktop)
+            for g in soup.find_all('div', class_='g'):
+                anchors = g.find_all('a')
+                if anchors:
+                    link = anchors[0].get('href')
+                    title = g.find('h3')
+                    if link and title and link.startswith('http'):
+                        if not any(r['url'] == link for r in results):
+                            # Try to find description
+                            desc = g.find('div', style=lambda x: x and '-webkit-line-clamp' in x)
+                            if not desc:
+                                desc = g.find('span', class_=lambda x: x and len(x) > 10) # Fallback for snippet
+                            
+                            results.append({
+                                "title": title.text.strip(),
+                                "description": desc.text.strip() if desc else "View result for more details...",
+                                "url": link,
+                                "domain": link.split("//")[-1].split("/")[0]
+                            })
     except Exception as e:
         print(f"Google Error: {e}")
 
     # Final touch: limit and return
-    return jsonify(results[:25]), 200
+    return jsonify(results[:30]), 200
 
 @search_bp.route('/suggest', methods=['GET'])
 def suggest():
