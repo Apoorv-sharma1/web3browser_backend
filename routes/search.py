@@ -3,6 +3,7 @@ import re
 from bs4 import BeautifulSoup
 from flask import Blueprint, request, jsonify, Response
 from urllib.parse import unquote
+import concurrent.futures
 
 search_bp = Blueprint('search', __name__)
 
@@ -112,62 +113,99 @@ def search():
     if not query:
         return jsonify({"error": "No search query provided"}), 400
 
-    headers = {
+    search_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     results = []
-    
-    # --- SOURCE 1: DuckDuckGo ---
-    try:
-        ddg_url = "https://html.duckduckgo.com/html/"
-        response = requests.post(ddg_url, data={'q': query}, headers=headers, timeout=5)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # DuckDuckGo Lite typically has 20-30 results per page
-            for item in soup.select('.result__body'):
-                title_el = item.select_one('.result__title a')
-                snippet_el = item.select_one('.result__snippet')
-                if title_el:
-                    href = title_el.get('href', '')
-                    if 'uddg=' in href:
-                        href = unquote(href.split('uddg=')[-1].split('&')[0])
-                    
-                    results.append({
-                        "title": title_el.text.strip(),
-                        "description": snippet_el.text.strip() if snippet_el else "No description available.",
-                        "url": href,
-                        "domain": href.split("//")[-1].split("/")[0] if "//" in href else "Web Link"
-                    })
-    except Exception as e:
-        print(f"DDG Error: {e}")
 
-    # --- SOURCE 2: Google ---
-    try:
-        # Use mobile UA for simpler, more scrapable HTML
-        google_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
-        google_url = f"https://www.google.com/search?q={query}&num=30"
-        res = requests.get(google_url, headers={"User-Agent": google_ua}, timeout=5)
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            # Google mobile uses specific structures: look for any 'a' with a nested 'div' or 'span' as title
-            for item in soup.select('div[data-sokp], div.v70zc, div.g'):
-                a = item.find('a')
-                if a and a.get('href', '').startswith('http'):
-                    link = a.get('href')
-                    if 'google.com' not in link and not any(r['url'] == link for r in results):
-                        title_el = item.find(['h3', 'div[role="heading"]', 'span'])
-                        if title_el:
-                            results.append({
+    def fetch_duckduckgo():
+        ddg_results = []
+        try:
+            # Use the more reliable HTML endpoint
+            ddg_url = f"https://duckduckgo.com/html/?q={query}"
+            res = requests.get(ddg_url, headers=search_headers, timeout=6)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                for item in soup.select('.result__body'):
+                    title_el = item.select_one('.result__title a')
+                    snippet_el = item.select_one('.result__snippet')
+                    if title_el:
+                        href = title_el.get('href', '')
+                        if 'uddg=' in href:
+                            href = unquote(href.split('uddg=')[-1].split('&')[0])
+                        ddg_results.append({
+                            "title": title_el.text.strip(),
+                            "description": snippet_el.text.strip() if snippet_el else "View in browser...",
+                            "url": href,
+                            "domain": href.split("//")[-1].split("/")[0] if "//" in href else "Web Link",
+                            "source": "ddg"
+                        })
+        except Exception as e:
+            print(f"DDG Parallel Error: {e}")
+        return ddg_results
+
+    def fetch_google():
+        google_results = []
+        try:
+            # Use Mobile UA for leaner HTML but with a more robust result target
+            google_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+            google_url = f"https://www.google.com/search?q={query}&num=30"
+            res = requests.get(google_url, headers={"User-Agent": google_ua}, timeout=6)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                # Aggressive selector for Google mobile
+                for a in soup.find_all('a'):
+                    href = a.get('href', '')
+                    if href.startswith('http') and 'google.com' not in href:
+                        title_el = a.find(['h3', 'span', 'div'])
+                        if title_el and len(title_el.get_text()) > 5:
+                            google_results.append({
                                 "title": title_el.get_text().strip(),
-                                "description": "View details in browser...",
-                                "url": link,
-                                "domain": link.split("//")[-1].split("/")[0]
+                                "description": "Google verified result.",
+                                "url": href,
+                                "domain": href.split("//")[-1].split("/")[0],
+                                "source": "google"
                             })
-    except Exception as e:
-        print(f"Google Error: {e}")
+        except Exception as e:
+            print(f"Google Parallel Error: {e}")
+        return google_results
 
-    # Deduplicate and ensure at least 25+ results
+    def fetch_bing():
+        bing_results = []
+        try:
+            bing_url = f"https://www.bing.com/search?q={query}&count=40"
+            res = requests.get(bing_url, headers=search_headers, timeout=6)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                for item in soup.select('li.b_algo'):
+                    title_el = item.find('h2')
+                    snippet_el = item.find('p')
+                    a = item.find('a')
+                    if title_el and a:
+                        href = a.get('href', '')
+                        bing_results.append({
+                            "title": title_el.get_text().strip(),
+                            "description": snippet_el.get_text().strip() if snippet_el else "Bing result link.",
+                            "url": href,
+                            "domain": href.split("//")[-1].split("/")[0] if "//" in href else "Web Link",
+                            "source": "bing"
+                        })
+        except Exception as e:
+            print(f"Bing Parallel Error: {e}")
+        return bing_results
+
+    # Use Concurrency for SPEED and VOLUME
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(fetch_duckduckgo): "ddg",
+            executor.submit(fetch_google): "google",
+            executor.submit(fetch_bing): "bing"
+        }
+        for future in concurrent.futures.as_completed(futures):
+            results.extend(future.result())
+
+    # Deduplicate and ensure at least 30+ results
     seen_urls = set()
     final_results = []
     for r in results:
@@ -175,6 +213,7 @@ def search():
             final_results.append(r)
             seen_urls.add(r['url'])
 
+    # Target 40 results total
     return jsonify(final_results[:40]), 200
 
 @search_bp.route('/suggest', methods=['GET'])
