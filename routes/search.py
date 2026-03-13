@@ -5,45 +5,62 @@ from flask import Blueprint, request, jsonify, Response
 
 search_bp = Blueprint('search', __name__)
 
-@search_bp.route('/proxy', methods=['GET'])
-def proxy_view():
+@search_bp.route('/check-frame', methods=['GET'])
+def check_frame():
     url = request.args.get('url')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
         
     try:
-        # Fetch the content with a generic User-Agent
-        res = requests.get(url, headers={
+        # Special hardcoded overrides for known difficult sites that block via JS 
+        # or have complex bot protection that prevents HEAD requests from seeing true headers
+        domain = url.lower()
+        if "youtube.com" in domain or "youtu.be" in domain or "opensea.io" in domain or "github.com" in domain or "twitter.com" in domain or "x.com" in domain or "google.com" in domain:
+            return jsonify({
+                "url": url,
+                "frameable": False,
+                "reason": "Known restrictive SPA",
+                "status_code": 200
+            }), 200
+            
+        # Use HEAD request to quickly check headers without downloading body
+        res = requests.head(url, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }, timeout=8, verify=False)
+        }, timeout=5, allow_redirects=True)
         
-        # Prepare headers to strip security and other problematic headers
-        excluded_headers = [
-            'content-encoding', 'content-length', 'transfer-encoding', 'connection',
-            'x-frame-options', 'content-security-policy', 'frame-ancestors'
-        ]
-        headers = [(name, value) for (name, value) in res.headers.items() if name.lower() not in excluded_headers]
+        headers = {k.lower(): v.lower() for k, v in res.headers.items()}
         
-        content = res.content
+        frameable = True
+        reason = ""
         
-        # If it's HTML, inject a <base> tag to help find relative resources
-        content_type = res.headers.get("Content-Type", "").lower()
-        if "text/html" in content_type:
-            soup = BeautifulSoup(content, 'html.parser')
-            if not soup.find('base'):
-                base_tag = soup.new_tag('base', href=url)
-                if soup.head:
-                    soup.head.insert(0, base_tag)
-                else:
-                    head = soup.new_tag('head')
-                    head.append(base_tag)
-                    soup.insert(0, head)
-            content = str(soup).encode('utf-8')
+        # Check X-Frame-Options
+        if 'x-frame-options' in headers:
+            val = headers['x-frame-options']
+            if 'deny' in val or 'sameorigin' in val:
+                frameable = False
+                reason = "X-Frame-Options"
+                
+        # Check Content-Security-Policy frame-ancestors
+        if frameable and 'content-security-policy' in headers:
+            csp = headers['content-security-policy']
+            if 'frame-ancestors' in csp and ("'none'" in csp or "http" not in csp): # Rough heuristic
+                frameable = False
+                reason = "Content-Security-Policy"
 
-        return Response(content, res.status_code, headers)
+        return jsonify({
+            "url": url,
+            "frameable": frameable,
+            "reason": reason,
+            "status_code": res.status_code
+        }), 200
+        
     except Exception as e:
-        print(f"Proxy Error for {url}: {e}")
-        return jsonify({"error": str(e)}), 500
+        # If we can't even connect (e.g. timeout, DNS error), assume it's not frameable
+        return jsonify({
+            "url": url,
+            "frameable": False,
+            "reason": f"Connection error: {str(e)}"
+        }), 200
 
 @search_bp.route('', methods=['GET'])
 def search():
