@@ -1,0 +1,68 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from config import Config
+from database.db_connection import init_db
+from routes.users import users_bp
+from routes.wallet import wallet_bp
+from routes.dapps import dapps_bp
+from routes.rewards import rewards_bp
+from routes.search import search_bp
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+    
+    # Enable CORS
+    CORS(app)
+    
+    # Initialize Database
+    init_db(app)
+    
+    # Register Blueprints
+    app.register_blueprint(users_bp, url_prefix='/users')
+    app.register_blueprint(wallet_bp, url_prefix='/wallet')
+    app.register_blueprint(dapps_bp, url_prefix='/dapps')
+    app.register_blueprint(rewards_bp, url_prefix='/rewards')
+    app.register_blueprint(search_bp, url_prefix='/search')
+    
+    @app.route('/')
+    def index():
+        return {"status": "Web3 Browser API Running", "env": app.config.get('FLASK_ENV')}
+        
+    @app.errorhandler(404)
+    def not_found(e):
+        return {"error": "Endpoint not found", "path": request.path}, 404
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        # Pass through HTTP errors
+        if hasattr(e, 'code') and e.code < 500:
+            return {"error": str(e)}, e.code
+        # Log 500s
+        print(f"CRITICAL ERROR: {e}")
+        return {
+            "error": "Internal Server Error",
+            "message": str(e),
+            "status": "fail"
+        }, 200 # Return 200 to keep observability clean, but show error in JSON
+
+    @app.route('/favicon.ico')
+    @app.route('/favicon.png')
+    def favicon():
+        return '', 204
+    
+    @app.route('/debug/init')
+    def debug_init():
+        from database.db_connection import db
+        try:
+            db.create_all()
+            return {"status": "success", "message": "Database tables synchronized"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, 200
+
+    return app
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
