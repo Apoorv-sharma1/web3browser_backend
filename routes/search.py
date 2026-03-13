@@ -1,9 +1,49 @@
 import requests
 import re
 from bs4 import BeautifulSoup
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 
 search_bp = Blueprint('search', __name__)
+
+@search_bp.route('/proxy', methods=['GET'])
+def proxy_view():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+        
+    try:
+        # Fetch the content with a generic User-Agent
+        res = requests.get(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }, timeout=8, verify=False)
+        
+        # Prepare headers to strip security and other problematic headers
+        excluded_headers = [
+            'content-encoding', 'content-length', 'transfer-encoding', 'connection',
+            'x-frame-options', 'content-security-policy', 'frame-ancestors'
+        ]
+        headers = [(name, value) for (name, value) in res.headers.items() if name.lower() not in excluded_headers]
+        
+        content = res.content
+        
+        # If it's HTML, inject a <base> tag to help find relative resources
+        content_type = res.headers.get("Content-Type", "").lower()
+        if "text/html" in content_type:
+            soup = BeautifulSoup(content, 'html.parser')
+            if not soup.find('base'):
+                base_tag = soup.new_tag('base', href=url)
+                if soup.head:
+                    soup.head.insert(0, base_tag)
+                else:
+                    head = soup.new_tag('head')
+                    head.append(base_tag)
+                    soup.insert(0, head)
+            content = str(soup).encode('utf-8')
+
+        return Response(content, res.status_code, headers)
+    except Exception as e:
+        print(f"Proxy Error for {url}: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @search_bp.route('', methods=['GET'])
 def search():
