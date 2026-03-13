@@ -82,7 +82,8 @@ def proxy_view():
         # Prepare headers to strip security and other problematic headers
         excluded_headers = [
             'content-encoding', 'content-length', 'transfer-encoding', 'connection',
-            'x-frame-options', 'content-security-policy', 'frame-ancestors', 'strict-transport-security'
+            'x-frame-options', 'content-security-policy', 'frame-ancestors', 'strict-transport-security',
+            'set-cookie' # Strip cookies to prevent tracking and auth issues in guest mode
         ]
         headers = [(name, value) for (name, value) in res.headers.items() if name.lower() not in excluded_headers]
         
@@ -103,14 +104,16 @@ def proxy_view():
                     head.append(base_tag)
                     soup.insert(0, head)
             
-            # 2. Aggressive Script/Telemetry Stripping
-            # We remove scripts that often cause 'Client-Side Exceptions' or hydration errors in proxied environments
+            # 2. Aggressive Script/Telemetry Stripping & Frame-Busting Prevention
             for script in soup.find_all('script'):
                 script_content = script.string or ""
-                # Remove Next.js/React hydration data and common trackers
-                if any(x in script_content for x in ['__NEXT_DATA__', 'hydrate', 'telemetry', 'analytics', 'sentry']):
+                # Remove common trackers and hydration artifacts
+                if any(x in script_content.lower() for x in ['__next_data__', 'hydrate', 'telemetry', 'analytics', 'sentry']):
                     script.decompose()
-                elif script.get('src') and any(x in script.get('src') for x in ['next/static', 'analytics.js', 'gtm.js']):
+                # Prevent Frame-Busting (e.g. if(top != self) top.location = self.location)
+                elif any(x in script_content.lower() for x in ['top.location', 'parent.location', 'window.frameElement']):
+                    script.string = script_content.replace('top.location', 'console.log("Frame-Busting Blocked")')
+                elif script.get('src') and any(x in script.get('src').lower() for x in ['next/static', 'analytics.js', 'gtm.js', 'ga.js']):
                     script.decompose()
 
             content = str(soup).encode('utf-8')
