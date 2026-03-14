@@ -3,7 +3,7 @@ from models.user_model import User
 from models.reward_model import Reward
 from datetime import datetime, date
 
-def add_points(wallet_address, activity_type):
+def add_points(wallet_address, activity_type, score=0):
     user = User.query.filter_by(wallet_address=wallet_address).first()
     if not user:
         return None
@@ -18,24 +18,16 @@ def add_points(wallet_address, activity_type):
     
     points_earned_today = 0
     for r in todays_rewards:
+        # Check if reward was created today (naive UTC compare is usually fine for daily caps)
         if r.created_at.date() == today:
             points_earned_today += r.points
             
-    if points_earned_today >= 100:
-        # Limit reached
-        return Reward(user_id=user.id, points=0)
-
-    # Check for specific wtf_quest daily limit (redundant now but keeps logic clean)
-    if activity_type == 'wtf_quest':
-        existing_quest = Reward.query.filter(
-            Reward.user_id == user.id,
-            Reward.points == 50
-        ).all()
-        
-        for eq in existing_quest:
-            if eq.created_at.date() == today:
-                return None
+    DAILY_CAP = 50000 # Raised from 100 to allow proper game progression rewards
     
+    if points_earned_today >= DAILY_CAP:
+        # Limit reached
+        return Reward(user_id=user.id, points=0, activity_type='cap_reached')
+
     points = 0
     if activity_type == 'dapp_interaction':
         points = 20
@@ -44,7 +36,8 @@ def add_points(wallet_address, activity_type):
     elif activity_type == 'wtf_quest':
         points = 50
     elif activity_type == 'wtf_quest_action':
-        points = 5
+        # Reward scaled by performance in WTF Zone games
+        points = max(5, int(score / 5)) 
     elif activity_type == 'node_referral':
         points = 50
     elif activity_type == 'partner_cashback':
@@ -53,8 +46,8 @@ def add_points(wallet_address, activity_type):
         points = 3000
         
     # Apply global cap (except for signup bonus)
-    if activity_type != 'signup_bonus' and points_earned_today + points > 100:
-        points = 100 - points_earned_today
+    if activity_type != 'signup_bonus' and points_earned_today + points > DAILY_CAP:
+        points = DAILY_CAP - points_earned_today
     
     new_reward = Reward(user_id=user.id, points=points, activity_type=activity_type)
     db.session.add(new_reward)

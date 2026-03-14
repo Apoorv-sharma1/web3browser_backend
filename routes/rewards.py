@@ -12,9 +12,10 @@ def claim_reward():
     data = request.json
     wallet_address = data.get('wallet_address')
     activity_type = data.get('activity_type', 'dapp_interaction')
+    score = data.get('score', 0)
     
     # Simulate claiming activity recorded by frontend
-    reward = add_points(wallet_address, activity_type)
+    reward = add_points(wallet_address, activity_type, score=score)
     if not reward:
         return jsonify({"error": "User not registered"}), 404
     
