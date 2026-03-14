@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from database.db_connection import db
 from models.user_model import User
+from services.reward_service import add_points
 
 users_bp = Blueprint('users', __name__)
 
@@ -19,6 +20,9 @@ def register_user():
     new_user = User(wallet_address=wallet_address)
     db.session.add(new_user)
     db.session.commit()
+    
+    # Award Signup Bonus
+    add_points(wallet_address, 'signup_bonus')
     
     return jsonify(new_user.to_dict()), 201
 

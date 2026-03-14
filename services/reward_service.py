@@ -49,9 +49,11 @@ def add_points(wallet_address, activity_type):
         points = 50
     elif activity_type == 'partner_cashback':
         points = 500
+    elif activity_type == 'signup_bonus':
+        points = 3000
         
-    # Apply global cap
-    if points_earned_today + points > 100:
+    # Apply global cap (except for signup bonus)
+    if activity_type != 'signup_bonus' and points_earned_today + points > 100:
         points = 100 - points_earned_today
     
     new_reward = Reward(user_id=user.id, points=points, activity_type=activity_type)
