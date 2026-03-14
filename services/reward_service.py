@@ -12,10 +12,12 @@ def add_points(wallet_address, activity_type):
         points = 50
     elif activity_type == 'login':
         points = 10
-    elif activity_type == 'santa_quest':
-        points = 2000
+    elif activity_type == 'wtf_quest':
+        points = 50
+    elif activity_type == 'wtf_quest_action':
+        points = 5
     elif activity_type == 'node_referral':
-        points = 5000
+        points = 50
     elif activity_type == 'partner_cashback':
         points = 500
     
