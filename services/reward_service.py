@@ -25,7 +25,7 @@ def add_points(wallet_address, activity_type):
     
     points = 0
     if activity_type == 'dapp_interaction':
-        points = 50
+        points = 20
     elif activity_type == 'login':
         points = 10
     elif activity_type == 'wtf_quest':
