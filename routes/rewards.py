@@ -23,20 +23,26 @@ def claim_reward():
 def redeem_points():
     data = request.json
     wallet_address = data.get('wallet_address')
+    points_to_redeem = int(data.get('points', 1000))
     
     user = User.query.filter_by(wallet_address=wallet_address).first()
     if not user:
         return jsonify({"error": "User not registered"}), 404
         
+    if points_to_redeem < 1000 or points_to_redeem % 1000 != 0:
+        return jsonify({"error": "Points must be in multiples of 1000"}), 400
+        
     # Calculate current total points
     rewards = Reward.query.filter_by(user_id=user.id).all()
     total_points = sum(r.points for r in rewards)
     
-    if total_points < 1000:
+    if total_points < points_to_redeem:
         return jsonify({"error": "Insufficient points"}), 400
         
+    token_to_add = float(points_to_redeem) / 1000.0
+        
     # Deduct points, add token
-    new_reward = Reward(user_id=user.id, points=-1000, token_amount=1.0)
+    new_reward = Reward(user_id=user.id, points=-points_to_redeem, token_amount=token_to_add)
     db.session.add(new_reward)
     db.session.commit()
     
