@@ -3,8 +3,8 @@ from models.user_model import User
 from models.reward_model import Reward
 from datetime import datetime, date
 
-def add_points(wallet_address, activity_type, score=0):
-    user = User.query.filter_by(wallet_address=wallet_address).first()
+def add_points(wallet_address, activity_type, score=0, profile_id=1):
+    user = User.query.filter_by(wallet_address=wallet_address, profile_id=profile_id).first()
     if not user:
         return None
         

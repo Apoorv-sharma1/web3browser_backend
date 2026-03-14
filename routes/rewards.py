@@ -11,11 +11,12 @@ rewards_bp = Blueprint('rewards', __name__)
 def claim_reward():
     data = request.json
     wallet_address = data.get('wallet_address')
+    profile_id = data.get('profile_id', 1)
     activity_type = data.get('activity_type', 'dapp_interaction')
     score = data.get('score', 0)
     
     # Simulate claiming activity recorded by frontend
-    reward = add_points(wallet_address, activity_type, score=score)
+    reward = add_points(wallet_address, activity_type, score=score, profile_id=profile_id)
     if not reward:
         return jsonify({"error": "User not registered"}), 404
     
@@ -25,9 +26,10 @@ def claim_reward():
 def redeem_points():
     data = request.json
     wallet_address = data.get('wallet_address')
+    profile_id = data.get('profile_id', 1)
     points_to_redeem = int(data.get('points', 1000))
     
-    user = User.query.filter_by(wallet_address=wallet_address).first()
+    user = User.query.filter_by(wallet_address=wallet_address, profile_id=profile_id).first()
     if not user:
         return jsonify({"error": "User not registered"}), 404
         
@@ -52,7 +54,8 @@ def redeem_points():
 
 @rewards_bp.route('/balance/<wallet_address>', methods=['GET'])
 def get_total_balance(wallet_address):
-    user = User.query.filter_by(wallet_address=wallet_address).first()
+    profile_id = request.args.get('profile_id', 1, type=int)
+    user = User.query.filter_by(wallet_address=wallet_address, profile_id=profile_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
         
@@ -67,7 +70,8 @@ def get_total_balance(wallet_address):
 
 @rewards_bp.route('/<wallet_address>', methods=['GET'])
 def get_reward_history(wallet_address):
-    user = User.query.filter_by(wallet_address=wallet_address).first()
+    profile_id = request.args.get('profile_id', 1, type=int)
+    user = User.query.filter_by(wallet_address=wallet_address, profile_id=profile_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
         

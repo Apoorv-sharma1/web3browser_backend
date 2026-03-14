@@ -87,6 +87,19 @@ def create_app():
             db.create_all()
             # Proactively add missing columns for existing tables
             from sqlalchemy import text
+            # Migrations for users table (multi-profile)
+            # 1. Add columns if missing
+            db.session.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_id INTEGER DEFAULT 1"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_name VARCHAR(50) DEFAULT 'Primary Core'"))
+            # 2. Add unique constraint if missing (wallet + profile)
+            # First, we need to handle the case where wallet_address might have a unique index we need to drop
+            # This is complex in a cross-DB way, but since we know it was 'users_wallet_address_key' or similar in Postgres
+            try:
+                db.session.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_wallet_address_key"))
+            except:
+                pass 
+            
+            # Migrations for rewards table
             db.session.execute(text("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS activity_type VARCHAR(50) DEFAULT 'dapp_interaction'"))
             db.session.execute(text("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS token_amount FLOAT DEFAULT 0.0"))
             db.session.commit()
