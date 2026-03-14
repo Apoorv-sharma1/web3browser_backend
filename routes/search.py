@@ -162,10 +162,18 @@ def proxy_view():
             content = str(soup).encode('utf-8')
 
         elif "text/css" in content_type:
-            # Fix absolute paths in CSS files
+            # Fix absolute and relative paths in CSS files
             css_content = content.decode('utf-8', errors='ignore')
-            # Replace url(/...) with url(original_domain/...)
-            css_content = re.sub(r'url\(([\'"]?)/', f'url(\\1{base_origin}/', css_content)
+            
+            def fix_css_url(match):
+                quote = match.group(1) or ""
+                path = match.group(2)
+                if path.startswith(('http://', 'https://', 'data:')):
+                    return match.group(0)
+                # Use urljoin with the original CSS file URL (if possible) or base url
+                return f"url({quote}{urljoin(url, path)}{quote})"
+                
+            css_content = re.sub(r'url\(([\'"]?)(.*?)\1\)', fix_css_url, css_content)
             content = css_content.encode('utf-8')
 
         return Response(content, res.status_code, headers)
