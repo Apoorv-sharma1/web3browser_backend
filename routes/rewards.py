@@ -50,12 +50,28 @@ def redeem_points():
     
     return jsonify(new_reward.to_dict()), 200
 
+@rewards_bp.route('/balance/<wallet_address>', methods=['GET'])
+def get_total_balance(wallet_address):
+    user = User.query.filter_by(wallet_address=wallet_address).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    rewards = Reward.query.filter_by(user_id=user.id).all()
+    total_points = sum(r.points for r in rewards)
+    total_tokens = sum(r.token_amount for r in rewards)
+    
+    return jsonify({
+        "total_points": total_points,
+        "total_tokens": total_tokens
+    }), 200
+
 @rewards_bp.route('/<wallet_address>', methods=['GET'])
 def get_reward_history(wallet_address):
     user = User.query.filter_by(wallet_address=wallet_address).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
         
+    # Return last 24h for the Activity Stream UI, but frontend will use /balance for header
     last_24h = datetime.utcnow() - timedelta(hours=24)
     rewards = Reward.query.filter(
         Reward.user_id == user.id,
