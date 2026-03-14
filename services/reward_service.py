@@ -54,7 +54,7 @@ def add_points(wallet_address, activity_type):
     if points_earned_today + points > 100:
         points = 100 - points_earned_today
     
-    new_reward = Reward(user_id=user.id, points=points)
+    new_reward = Reward(user_id=user.id, points=points, activity_type=activity_type)
     db.session.add(new_reward)
     db.session.commit()
     return new_reward

@@ -3,6 +3,7 @@ from models.user_model import User
 from models.reward_model import Reward
 from database.db_connection import db
 from services.reward_service import add_points
+from datetime import datetime, timedelta
 
 rewards_bp = Blueprint('rewards', __name__)
 
@@ -54,5 +55,9 @@ def get_reward_history(wallet_address):
     if not user:
         return jsonify({"error": "User not found"}), 404
         
-    rewards = Reward.query.filter_by(user_id=user.id).all()
+    last_24h = datetime.utcnow() - timedelta(hours=24)
+    rewards = Reward.query.filter(
+        Reward.user_id == user.id,
+        Reward.created_at >= last_24h
+    ).order_by(Reward.created_at.desc()).all()
     return jsonify([r.to_dict() for r in rewards]), 200
