@@ -4,6 +4,10 @@ from bs4 import BeautifulSoup
 from flask import Blueprint, request, jsonify, Response
 from urllib.parse import unquote
 import concurrent.futures
+import urllib3
+
+# Suppress InsecureRequestWarning for the proxy
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 search_bp = Blueprint('search', __name__)
 
