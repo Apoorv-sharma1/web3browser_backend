@@ -108,15 +108,15 @@ def proxy_view():
                     head.append(base_tag)
                     soup.insert(0, head)
             
-            # 2. Rewrite absolute URLs in src, href, poster, etc.
+            # 2. Universal URL Rewriting for all tags and common attributes
             from urllib.parse import urljoin, urlparse
-            base_url_obj = urlparse(url)
-            base_origin = f"{base_url_obj.scheme}://{base_url_obj.netloc}"
             
-            for tag in soup.find_all(['img', 'script', 'video', 'source', 'link', 'a', 'iframe']):
-                for attr in ['src', 'href', 'poster', 'data-src', 'srcset', 'style']:
+            # We use the full page URL as the base for joining relative paths
+            for tag in soup.find_all(True):  # Find all tags
+                for attr in ['src', 'href', 'poster', 'data-src', 'srcset', 'style', 'action']:
                     val = tag.get(attr)
-                    if not val: continue
+                    if not val or val.startswith(('http://', 'https://', 'data:', 'javascript:', '#')):
+                        continue
                     
                     if attr == 'srcset':
                         # Handle comma-separated srcset
@@ -124,9 +124,9 @@ def proxy_view():
                         new_parts = []
                         for p in parts:
                             p = p.strip()
-                            if p.startswith('/'):
+                            if p and not p.startswith(('http://', 'https://')):
                                 subparts = p.split(' ')
-                                url_part = urljoin(base_origin, subparts[0])
+                                url_part = urljoin(url, subparts[0])
                                 new_parts.append(url_part + (' ' + subparts[1] if len(subparts) > 1 else ''))
                             else:
                                 new_parts.append(p)
@@ -134,10 +134,18 @@ def proxy_view():
                     elif attr == 'style':
                         # Handle url() in styles
                         if 'url(' in val:
-                            tag[attr] = re.sub(r'url\(([\'"]?)/', f'url(\\1{base_origin}/', val)
-                    elif val.startswith('/'):
-                        # Convert absolute path to absolute URL
-                        tag[attr] = urljoin(base_origin, val)
+                            # Replace url(/...) or url(relative/...) with absolute version
+                            # This regex handles both quoted and unquoted URLs
+                            def fix_css_url(match):
+                                quote = match.group(1) or ""
+                                path = match.group(2)
+                                if path.startswith(('http://', 'https://', 'data:')):
+                                    return match.group(0)
+                                return f"url({quote}{urljoin(url, path)}{quote})"
+                            tag[attr] = re.sub(r'url\(([\'"]?)(.*?)\1\)', fix_css_url, val)
+                    else:
+                        # Convert relative path to absolute URL
+                        tag[attr] = urljoin(url, val)
 
             # 3. Aggressive Script/Telemetry Stripping & Frame-Busting Prevention
             for script in soup.find_all('script'):
