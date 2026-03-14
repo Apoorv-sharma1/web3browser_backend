@@ -36,8 +36,15 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_exception(e):
         # Pass through HTTP errors
-        if hasattr(e, 'code') and e.code < 500:
-            return {"error": str(e)}, e.code
+        code = getattr(e, 'code', 500)
+        if not isinstance(code, int):
+            try:
+                code = int(code)
+            except:
+                code = 500
+
+        if code < 500:
+            return {"error": str(e)}, code
         # Log 500s
         print(f"CRITICAL ERROR: {e}")
         return {
@@ -78,9 +85,15 @@ def create_app():
                   
         try:
             db.create_all()
+            # Proactively add missing columns for existing tables
+            from sqlalchemy import text
+            db.session.execute(text("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS activity_type VARCHAR(50) DEFAULT 'dapp_interaction'"))
+            db.session.execute(text("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS token_amount FLOAT DEFAULT 0.0"))
+            db.session.commit()
+            
             return {
                 "status": "success", 
-                "message": "Database tables synchronized",
+                "message": "Database tables synchronized and schema updated",
                 "debug": {
                     "db_uri_configured": masked_uri,
                     "sqlalchemy_track": app.config.get('SQLALCHEMY_TRACK_MODIFICATIONS')
