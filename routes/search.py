@@ -104,7 +104,19 @@ def proxy_view():
                     head.append(base_tag)
                     soup.insert(0, head)
             
-            # 2. Aggressive Script/Telemetry Stripping & Frame-Busting Prevention
+            # 2. Rewrite absolute URLs in src, href, poster, etc.
+            from urllib.parse import urljoin, urlparse
+            base_url_obj = urlparse(url)
+            base_origin = f"{base_url_obj.scheme}://{base_url_obj.netloc}"
+            
+            for tag in soup.find_all(['img', 'script', 'video', 'source', 'link', 'a']):
+                for attr in ['src', 'href', 'poster', 'data-src']:
+                    val = tag.get(attr)
+                    if val and val.startswith('/'):
+                        # Convert absolute path to absolute URL
+                        tag[attr] = urljoin(base_origin, val)
+
+            # 3. Aggressive Script/Telemetry Stripping & Frame-Busting Prevention
             for script in soup.find_all('script'):
                 script_content = script.string or ""
                 # Remove common trackers and hydration artifacts
