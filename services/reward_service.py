@@ -8,19 +8,32 @@ def add_points(wallet_address, activity_type):
     if not user:
         return None
         
-    # Check for daily wtf_quest limit
+    today = date.today()
+    
+    # Calculate total points earned today
+    todays_rewards = Reward.query.filter(
+        Reward.user_id == user.id,
+        Reward.points > 0
+    ).all()
+    
+    points_earned_today = 0
+    for r in todays_rewards:
+        if r.created_at.date() == today:
+            points_earned_today += r.points
+            
+    if points_earned_today >= 100:
+        # Limit reached
+        return Reward(user_id=user.id, points=0)
+
+    # Check for specific wtf_quest daily limit (redundant now but keeps logic clean)
     if activity_type == 'wtf_quest':
-        today = date.today()
-        # Find if the user already did wtf_quest today
         existing_quest = Reward.query.filter(
             Reward.user_id == user.id,
-            Reward.points == 50  # This relies on the fact that wtf_quest is 50 pts, but normally we'd track activity_type in the DB.
+            Reward.points == 50
         ).all()
         
-        # Since we don't store activity_type explicitly on Reward yet, we check timestamp dates
         for eq in existing_quest:
-            if eq.timestamp.date() == today:
-                # Quest already completed today
+            if eq.created_at.date() == today:
                 return None
     
     points = 0
@@ -36,6 +49,10 @@ def add_points(wallet_address, activity_type):
         points = 50
     elif activity_type == 'partner_cashback':
         points = 500
+        
+    # Apply global cap
+    if points_earned_today + points > 100:
+        points = 100 - points_earned_today
     
     new_reward = Reward(user_id=user.id, points=points)
     db.session.add(new_reward)
