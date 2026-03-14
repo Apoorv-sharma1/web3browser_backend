@@ -109,10 +109,29 @@ def proxy_view():
             base_url_obj = urlparse(url)
             base_origin = f"{base_url_obj.scheme}://{base_url_obj.netloc}"
             
-            for tag in soup.find_all(['img', 'script', 'video', 'source', 'link', 'a']):
-                for attr in ['src', 'href', 'poster', 'data-src']:
+            for tag in soup.find_all(['img', 'script', 'video', 'source', 'link', 'a', 'iframe']):
+                for attr in ['src', 'href', 'poster', 'data-src', 'srcset', 'style']:
                     val = tag.get(attr)
-                    if val and val.startswith('/'):
+                    if not val: continue
+                    
+                    if attr == 'srcset':
+                        # Handle comma-separated srcset
+                        parts = val.split(',')
+                        new_parts = []
+                        for p in parts:
+                            p = p.strip()
+                            if p.startswith('/'):
+                                subparts = p.split(' ')
+                                url_part = urljoin(base_origin, subparts[0])
+                                new_parts.append(url_part + (' ' + subparts[1] if len(subparts) > 1 else ''))
+                            else:
+                                new_parts.append(p)
+                        tag[attr] = ', '.join(new_parts)
+                    elif attr == 'style':
+                        # Handle url() in styles
+                        if 'url(' in val:
+                            tag[attr] = re.sub(r'url\(([\'"]?)/', f'url(\\1{base_origin}/', val)
+                    elif val.startswith('/'):
                         # Convert absolute path to absolute URL
                         tag[attr] = urljoin(base_origin, val)
 
@@ -129,6 +148,13 @@ def proxy_view():
                     script.decompose()
 
             content = str(soup).encode('utf-8')
+
+        elif "text/css" in content_type:
+            # Fix absolute paths in CSS files
+            css_content = content.decode('utf-8', errors='ignore')
+            # Replace url(/...) with url(original_domain/...)
+            css_content = re.sub(r'url\(([\'"]?)/', f'url(\\1{base_origin}/', css_content)
+            content = css_content.encode('utf-8')
 
         return Response(content, res.status_code, headers)
     except Exception as e:
