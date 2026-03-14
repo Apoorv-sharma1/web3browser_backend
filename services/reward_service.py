@@ -12,6 +12,12 @@ def add_points(wallet_address, activity_type):
         points = 50
     elif activity_type == 'login':
         points = 10
+    elif activity_type == 'santa_quest':
+        points = 2000
+    elif activity_type == 'node_referral':
+        points = 5000
+    elif activity_type == 'partner_cashback':
+        points = 500
     
     new_reward = Reward(user_id=user.id, points=points)
     db.session.add(new_reward)
