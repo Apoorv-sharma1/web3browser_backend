@@ -2,16 +2,23 @@
 
 The powerful Python-based backend server powering the Web3 Browser platform. This intelligence layer manages decentralized user identities (neural signatures), orchestrates gamified reward systems, indexes decentralized applications (dApps), and provides a secure search functionality to prevent cross-origin breaches.
 
-## 🚀 The Vision: Promoting Web3 & Social Impact
+## 🚀 Product Overview
+**What is your dApp about?**
+The powerful Python-based backend server powering the Web3 Browser platform. This intelligence layer manages decentralized user identities (neural signatures), orchestrates gamified reward systems, indexes decentralized applications (dApps), and provides a secure search functionality to prevent cross-origin breaches.
 
-Our browser ecosystem aims to solve the steep learning curve associated with Web3. We've built an environment that is **not just a tool, but an educational gateway**. The backend supports these goals by maintaining the state of the user's progress.
+**What problem are you solving?**
+The steep learning curve and security risks associated with Web3. Our backend acts as a protective, educational gateway that maintains the state of a user's progress, validating and issuing rewards to prevent exploitation while keeping users securely sandboxed.
 
-### Unique Selling Propositions (USPs)
-- **Gamified Onboarding**: Users earn points and cryptocurrency (Hela) by interacting with dApps, completing quests (like the "Scholar" or "Explorer"), and engaging with educational content. The backend validates and issues these rewards to prevent exploitation.
-- **Inbuilt Wallet Gateway**: Interacts seamlessly with the frontend's wallet connection, storing profiles mapped to Web3 addresses securely.
-- **Native Security**: Validates whether decentralized application links can be securely rendered via `check-frame` endpoints, keeping the user in the safe sandbox environment when possible.
-- **Ecosystem Registry**: Serves a curated grid of trusted decentralized applications (DeFi, NFTs, Bridges) to prevent beginners from falling victim to phishing sites.
-- **Social Impact**: By rewarding users for learning about decentralized technologies and security best practices, we foster a more educated, technically empowered, and financially self-sovereign community.
+---
+
+## 🎯 Use Case
+**Who is this product built for?**
+- Web2 users exploring Web3 for the first time.
+- Users looking to securely onboard and manage their decentralized identity.
+- Individuals looking to earn crypto rewards through onboarding quests securely.
+
+**Why does this matter for users?**
+It provides a secure, trustworthy environment where users are rewarded for learning. By validating interactions server-side, it prevents malicious exploits of the reward system and ensures a fair, technically empowering, and financially self-sovereign community.
 
 ---
 
@@ -26,58 +33,32 @@ Our browser ecosystem aims to solve the steep learning curve associated with Web
 
 ---
 
-## 🏗️ Project Structure
-Built with **Flask** and **SQLAlchemy**, designed as a lightweight, robust JSON API.
+## 🏗️ Architecture
+**How does your product work?**
+1. **User Registration**: When a user connects their wallet on the frontend, the backend registers the address, assigning them an internal ID and initiating their points balance.
+2. **Activity Tracking**: As the user explores the decentralized web or completes "WTF Quests", the frontend pings the `/rewards/claim` endpoint. The backend processes the activity type and increments the user's score up to predefined daily caps.
+3. **Redemption Matrix**: When a user accumulates over 1,000 internal points, they can execute a redemption. The backend deducts the internal points and orchestrates the conversion to equivalent "Hela Tokens".
+4. **Search and Validation**: The backend provides suggestion endpoints and acts as an indexer.
 
-```
-backend/
-├── app.py               # Main Flask application initialization and database setup
-├── config.py            # Environment configurations (CORS, Database URI)
-├── requirements.txt     # Python dependencies
-├── vercel.json          # Vercel deployment configuration
-├── models/              # Database schema definitions (SQLAlchemy)
-│   ├── Base.py          # Declarative Base
-│   ├── User.py          # User models and profile tracking
-│   ├── AppRegistry.py   # dApp directory and search indexing
-│   └── ActivityLog.py   # Gamification logging
-├── routes/              # API Endpoints
-│   ├── users.py         # Registration and session endpoints
-│   ├── rewards.py       # Point claiming and token redemption logic
-│   └── search.py        # dApp indexing and frame checking
-├── services/            # Core business logic
-│   └── hela_engine.py   # Smart contract interaction handlers
-└── instance/            # SQLite development database (auto-generated)
-```
+**What components are involved?**
+Built with **Flask** and **SQLAlchemy**, designed as a lightweight, robust JSON API.
+- **`app.py` & `routes/`**: Main Flask application and API Endpoints (users, rewards, search).
+- **`models/`**: Database schema definitions (User profiles, Gamification logging).
+- **`services/hela_engine.py`**: Smart contract interaction handlers for the Hela Network.
 
 ---
 
-## 🔗 Smart Contract Integration
+## 🔗 HeLa Integration
+**How is your dApp leveraging the HeLa Network?**
+The platform integrates directly with the **Hela Network**. The backend tracks aggregate educational and browsing points locally, and handles the cryptographic logic when a user opts to sync (redeem) their points for on-chain assets. It orchestrates the distribution of the native HLUSD token directly to the user's connected wallet on the Hela Testnet.
 
-The platform integrates directly with the **Hela Network**. The backend tracks aggregate points locally, and handles the logic when a user opts to sync (redeem) their points for on-chain assets.
-
-### Network Capabilities (Hela Testnet)
-- **Network Name**: Hela Testnet
-- **Chain ID**: `666888` (Hex: `0xa2d08`)
-- **RPC URL**: `https://testnet-rpc.helachain.com`
-- **Block Explorer**: `https://testnet-blockexplorer.helachain.com`
-- **Native Currency**: HLUSD
-
-### Deployed Contract Details
+### Deployed Contract Details (Hela Testnet)
 - **Token / Contract Address**: `0xBE75FDe9DeDe700635E3dDBe7e29b5db1A76C125`
 
 **Proof of Transactions (Tx Hashes):**
 1. `0x189b830b54a34d492d1ba594211f9bb7a54f853dda5cae343b89cb7acd9dc987`
 2. `0x661e041ea358d82da5d8ea2fdf37f7bea92370fce6a6f7ae880244abee42b7c2`
 3. `0xe80ffdf3b88357dd5490f63ac42a457be69b749168ddc742abd3baf96f51ed9e`
-
----
-
-## ⚙️ How it Works Currently
-
-1. **User Registration**: When a user connects their wallet on the frontend, the backend registers the address, assigning them an internal ID and initiating their points balance.
-2. **Activity Tracking**: As the user explores the decentralized web or completes "WTF Quests", the frontend pings the `/rewards/claim` endpoint. The backend processes the activity type and increments the user's score up to predefined daily caps.
-3. **Redemption Matrix**: When a user accumulates over 1,000 internal points, they can execute a redemption. The backend deducts the internal points and converts them to equivalent "Hela Tokens" which represent the user's gamified earnings.
-4. **Search and Validation**: The backend provides suggestion endpoints and acts as an indexer. It also formerly provided a `check-frame` API point to natively guard the browser against Cross-Origin resource sharing blocks.
 
 ---
 
